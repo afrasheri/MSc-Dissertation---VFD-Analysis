@@ -25,7 +25,7 @@ OUTPUT_FILE_PREFIX = "VFD Savings Report"
 VFD_SAMPLE_MINUTES = 3
 FAN_VFD_SCALE_THRESHOLD = 110
 FAN_VFD_SCALE_FACTOR = 10
-VESSEL_INFO_EXCEL = "POWER_AND_VOLTAGE_PER_SW_&_FANS(1).xlsx"
+VESSEL_INFO_EXCEL = "POWER_AND_VOLTAGE_PER_SW_&_FANS.xlsx"
 SAVED_FUEL_MT_PER_KWH = 0.220 / 1000
 HFO_USD_PER_MT = 490
 ULS_MGO_USD_PER_MT = 600
@@ -44,7 +44,6 @@ MAIN_KPI_METRIC_COLUMNS = [
 ]
 MOTOR_CATEGORY_MAX_RUNNING = {
     "SW": 3,
-    "FW": 3,
     "FANS": 4
 }
 
@@ -61,33 +60,23 @@ RAW_DATA_DIR = Path(
 ).expanduser().resolve()
 
 VOYAGES_FILE_CANDIDATES = [
-    "Voyages.xlsx",
-    "Voyages(1).xlsx",
-    "VOYAGES_ALL.xlsx",
+    "Voyages.xlsx"
 ]
 
 REPORTS_FILE_CANDIDATES = [
-    "REPORT_VIEWER.xlsx",
-    "REPORT_VIEWER(1).xlsx",
-    "REPORTS_VIEW_ALL.xlsx",
+    "REPORT_VIEWER.xlsx"
 ]
 
 TELEMETRY_CALC_FILE_CANDIDATES = [
-    "Consumptions.xlsx",
-    "Consumptions(1).xlsx",
-    "MIDDAY_REPORTS_ALL.xlsx",
+    "Consumptions.xlsx"
 ]
 
 VESSEL_INFO_FILE_CANDIDATES = [
-    "POWER_AND_VOLTAGE_PER_SW_&_FANS.xlsx",
-    "POWER_AND_VOLTAGE_PER_SW_&_FANS(1).xlsx",
-    "VESSEL_VFD_POWER_AND_CURRENTS_FW_SW_FANS.xlsx",
-    "VESSEL_INFO.xlsx",
+    "POWER_AND_VOLTAGE_PER_SW_&_FANS.xlsx"
 ]
 
 RAW_WORKBOOK_PATTERNS = [
-    "*RAW_DATA*.xlsx",
-    "*raw_data*.xlsx",
+    "*RAW_DATA*.xlsx"
 ]
 
 COMMON_VESSEL_COLUMN_CANDIDATES = [
@@ -123,28 +112,6 @@ VFD_CANDIDATES = {
         "status": ["P8_03_Status", "SW3_OUT_STATUS_HMI"],
         "load": ["P8_03_Load", "SW3_OUT_FreqFeedBack"],
         "bypass": ["P8_03_Bypass", "SW3_Bypass"]
-    },
-
-    "FW1": {
-        "current": ["FW1_OUT_Current"],
-        "auto": ["FW1_Auto"],
-        "status": ["FW1_OUT_STATUS_HMI"],
-        "load": ["FW1_OUT_FreqFeedBack"],
-        "bypass": ["FW1_Bypass"]
-    },
-    "FW2": {
-        "current": ["FW2_OUT_Current"],
-        "auto": ["FW2_Auto"],
-        "status": ["FW2_OUT_STATUS_HMI"],
-        "load": ["FW2_OUT_FreqFeedBack"],
-        "bypass": ["FW2_Bypass"]
-    },
-    "FW3": {
-        "current": ["FW3_OUT_Current"],
-        "auto": ["FW3_Auto"],
-        "status": ["FW3_OUT_STATUS_HMI"],
-        "load": ["FW3_OUT_FreqFeedBack"],
-        "bypass": ["FW3_Bypass"]
     },
 
     "FAN1": {
@@ -1264,19 +1231,6 @@ def get_equipment_power_from_excel(vessel_info_row, equipment):
     return np.nan
 
 
-def should_include_fw_pumps_table(vessel_info_row):
-    for equipment in ["FW1", "FW2", "FW3"]:
-        equipment_power = get_equipment_power_from_excel(
-            vessel_info_row,
-            equipment
-        )
-
-        if pd.notna(equipment_power) and equipment_power > 0:
-            return True
-
-    return False
-
-
 # =====================================================
 # REPORTS / SEGMENTS HELPERS
 # =====================================================
@@ -1479,12 +1433,19 @@ def get_reports_for_segment(segment_row, reports_df, ctx=None):
         end_dt = segment_row["end_date"]
 
     if segment_row["segment_type"] == "Port Stay":
-        allowed_types = ["Port", "Shift",'Drift']
+        # A report interval is interpreted as (previous report, current report].
+        # Therefore, a Departure report at the end of a port call closes the
+        # Port Stay interval and must be assigned to Port Stay, not to the
+        # following Sea Passage.
+        allowed_types = ["Port", "Shift", "Drift", "Departure"]
         start_mask = reports_df["REPORT_DT_UTC"] > start_dt
 
     elif segment_row["segment_type"] == "Sea Passage":
         allowed_types = ["Departure", "Arrival", "Noon"]
-        start_mask = reports_df["REPORT_DT_UTC"] >= start_dt
+        # Exclude a Departure report exactly on the segment boundary. It is
+        # the endpoint of the preceding Port Stay. A Departure report recorded
+        # after the boundary is retained as the first Sea Passage report.
+        start_mask = reports_df["REPORT_DT_UTC"] > start_dt
 
     else:
         allowed_types = []
@@ -1522,46 +1483,12 @@ def apply_segment_intervals(seg_reports, segment_row):
 
     seg_reports.loc[0, "INTERVAL_START"] = segment_start
 
-    first_report_dt = seg_reports.loc[0, "REPORT_DT_UTC"]
-    first_report_type = str(seg_reports.loc[0, "REPORT_TYPE"]).strip()
-
-    is_first_sea_departure = (
-        segment_row["segment_type"] == "Sea Passage" and
-        first_report_type == "Departure" and
-        pd.notna(segment_start) and
-        pd.notna(first_report_dt) and
-        first_report_dt == segment_start
-    )
-
-    if is_first_sea_departure:
-        previous_report_dt = seg_reports.loc[0].get(
-            "PREV_REPORT_DT_UTC",
-            pd.NaT
-        )
-
-        if pd.notna(previous_report_dt):
-            seg_reports.loc[0, "INTERVAL_START"] = previous_report_dt
-
-        else:
-            first_hours = pd.to_numeric(
-                seg_reports.loc[0].get("HOURS_FIXED", np.nan),
-                errors="coerce"
-            )
-
-            if pd.notna(first_hours) and first_hours > 0:
-                seg_reports.loc[0, "INTERVAL_START"] = (
-                    first_report_dt - pd.to_timedelta(first_hours, unit="h")
-                )
-
     if pd.notna(segment_start):
-        start_index = 1 if is_first_sea_departure else 0
-
-        if start_index < len(seg_reports):
-            seg_reports.loc[start_index:, "INTERVAL_START"] = (
-                seg_reports.loc[start_index:, "INTERVAL_START"].apply(
-                    lambda x: max(x, segment_start) if pd.notna(x) else segment_start
-                )
+        seg_reports.loc[:, "INTERVAL_START"] = (
+            seg_reports["INTERVAL_START"].apply(
+                lambda x: max(x, segment_start) if pd.notna(x) else segment_start
             )
+        )
 
     if pd.notna(segment_end):
         seg_reports["INTERVAL_END"] = seg_reports["INTERVAL_END"].apply(
@@ -2753,7 +2680,7 @@ def calculate_number_of_running_motors(
 def format_running_motors_breakdown(parts):
     labels = []
 
-    for category_name in ["SW", "FW", "FANS"]:
+    for category_name in ["SW", "FANS"]:
         if category_name not in parts:
             continue
 
@@ -3412,18 +3339,16 @@ def build_vfd_report_level_tables(
     seg_reports = get_reports_for_segment(segment_row, reports_df, ctx)
 
     if seg_reports.empty or dt1.empty or "DateTimeStamp" not in dt1.columns:
-        empty_result = (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+        empty_result = (pd.DataFrame(), pd.DataFrame())
         vfd_cache[cache_key] = empty_result
         return tuple(frame.copy(deep=False) for frame in empty_result)
 
     seg_reports = apply_segment_intervals(seg_reports, segment_row)
 
     sw_rows = []
-    fw_rows = []
     fan_rows = []
 
     SW_EQUIP = ["SW1", "SW2", "SW3"]
-    FW_EQUIP = ["FW1", "FW2", "FW3"]
     FAN_EQUIP = ["FAN1", "FAN2", "FAN3", "FAN4"]
 
     for _, row in seg_reports.iterrows():
@@ -3495,24 +3420,6 @@ def build_vfd_report_level_tables(
 
         sw_rows.append(sw_row)
 
-        # ---------------- FW TABLE ----------------
-        fw_row = base_info.copy()
-        fw_row["PID_set_point"] = pid_set_point
-        fw_row["__PID_SET_POINT_WEIGHT"] = pid_set_point_weight
-        fw_row["__VFD_SAMPLE_HOURS"] = vfd_sample_hours
-        fw_row["__REPORT_INTERVAL_HOURS"] = report_interval_hours
-
-        for eq in FW_EQUIP:
-            fw_row[f"{eq}_RH"] = equipment_metrics.get(f"{eq}_RH", 0)
-            fw_row[f"{eq}_Auto"] = equipment_metrics.get(f"{eq}_Auto", 0)
-            fw_row[f"{eq}_ByPass"] = equipment_metrics.get(f"{eq}_ByPass", 0)
-            fw_row[f"{eq}_Hz %"] = equipment_metrics.get(f"{eq}_Hz %", 0)
-            fw_row[f"{eq}_kWh"] = equipment_metrics.get(f"{eq}_kWh", 0)
-            fw_row[f"{eq}_MAX"] = equipment_metrics.get(f"{eq}_MAX", 0)
-            fw_row[f"{eq}_Save"] = equipment_metrics.get(f"{eq}_Save", 0)
-
-        fw_rows.append(fw_row)
-
         # ---------------- FAN TABLE ----------------
         fan_row = base_info.copy()
         fan_row["ER Range Temp."] = er_range_temp["display"]
@@ -3535,18 +3442,15 @@ def build_vfd_report_level_tables(
         fan_rows.append(fan_row)
 
     sw_df = pd.DataFrame(sw_rows)
-    fw_df = pd.DataFrame(fw_rows)
     fan_df = pd.DataFrame(fan_rows)
 
     sw_df = add_category_report_saving_columns(sw_df, ["SW1", "SW2", "SW3"])
-    fw_df = add_category_report_saving_columns(fw_df, ["FW1", "FW2", "FW3"])
     fan_df = add_category_report_saving_columns(fan_df, ["FAN1", "FAN2", "FAN3", "FAN4"])
 
     sw_df = add_total_row_vfd(sw_df)
-    fw_df = add_total_row_vfd(fw_df)
     fan_df = add_total_row_vfd(fan_df)
 
-    cached_result = (sw_df, fw_df, fan_df)
+    cached_result = (sw_df, fan_df)
     vfd_cache[cache_key] = cached_result
     return tuple(frame.copy(deep=False) for frame in cached_result)
 
@@ -3630,10 +3534,8 @@ def calculate_usd_savings_from_fuel_mix(fuel_mt, fuel_mix=None):
 
 def build_motor_category_segment_summary(
     sw_df,
-    fw_df,
     fan_df,
-    fuel_mix=None,
-    include_fw_pumps=True
+    fuel_mix=None
 ):
     def summarize_category(df, equipment_list, category_name):
         max_running_motors = get_max_running_motors(category_name, equipment_list)
@@ -3773,9 +3675,6 @@ def build_motor_category_segment_summary(
     rows = [
         summarize_category(sw_df, ["SW1", "SW2", "SW3"], "SW")
     ]
-
-    if include_fw_pumps:
-        rows.append(summarize_category(fw_df, ["FW1", "FW2", "FW3"], "FW"))
 
     rows.append(
         summarize_category(fan_df, ["FAN1", "FAN2", "FAN3", "FAN4"], "FANS")
@@ -3930,13 +3829,6 @@ def build_final_motor_summary_by_segment_type(
         "FANS": ["FAN1", "FAN2", "FAN3", "FAN4"]
     }
 
-    if should_include_fw_pumps_table(vessel_info_row):
-        category_map = {
-            "SW": ["SW1", "SW2", "SW3"],
-            "FW": ["FW1", "FW2", "FW3"],
-            "FANS": ["FAN1", "FAN2", "FAN3", "FAN4"]
-        }
-
     for category_name, equip_list in category_map.items():
         max_running_motors = get_max_running_motors(category_name, equip_list)
 
@@ -3965,7 +3857,7 @@ def build_final_motor_summary_by_segment_type(
                 if not seg_reports_for_mix.empty:
                     fuel_mix_report_tables.append(seg_reports_for_mix)
 
-                sw_df, fw_df, fan_df = build_vfd_report_level_tables(
+                sw_df, fan_df = build_vfd_report_level_tables(
                     segment_row=segment_row,
                     reports_df=reports_df,
                     dt1=dt1,
@@ -3977,8 +3869,6 @@ def build_final_motor_summary_by_segment_type(
 
                 if category_name == "SW":
                     work_df = sw_df.copy()
-                elif category_name == "FW":
-                    work_df = fw_df.copy()
                 else:
                     work_df = fan_df.copy()
 
@@ -4529,7 +4419,7 @@ def calculate_vfd_missing_data_stats(
     }
 
 
-def build_vfd_segment_summary_tables(sw_df, fw_df, fan_df):
+def build_vfd_segment_summary_tables(sw_df, fan_df):
     def summarize_group(df, equipment_list):
         rows = []
 
@@ -4602,10 +4492,9 @@ def build_vfd_segment_summary_tables(sw_df, fw_df, fan_df):
         return pd.DataFrame(rows)
 
     sw_summary = summarize_group(sw_df, ["SW1", "SW2", "SW3"])
-    fw_summary = summarize_group(fw_df, ["FW1", "FW2", "FW3"])
     fan_summary = summarize_group(fan_df, ["FAN1", "FAN2", "FAN3", "FAN4"])
 
-    return sw_summary, fw_summary, fan_summary
+    return sw_summary, fan_summary
 
 
 # =====================================================
@@ -4669,9 +4558,9 @@ def remove_total_rows_for_excel_sheet(df):
     return df_without_totals.reset_index(drop=True)
 
 
-def combine_report_tables_horizontally(main_df, sw_df, fw_df, fans_df):
+def combine_report_tables_horizontally(main_df, sw_df, fans_df):
     """Join the KPI and equipment tables into one row per report."""
-    tables = [("", main_df), ("SW", sw_df), ("FW", fw_df), ("FAN", fans_df)]
+    tables = [("", main_df), ("SW", sw_df), ("FAN", fans_df)]
     combined = None
 
     for prefix, table in tables:
@@ -5176,8 +5065,6 @@ def build_full_excel(
             "border": 1
         })
 
-        include_fw_pumps_table = should_include_fw_pumps_table(vessel_info_row)
-
         combined_report_tables = []
 
         if segments_df.empty:
@@ -5195,7 +5082,7 @@ def build_full_excel(
                     ctx=ctx
                 )
 
-                sw_vfd_df, fw_vfd_df, fan_vfd_df = build_vfd_report_level_tables(
+                sw_vfd_df, fan_vfd_df = build_vfd_report_level_tables(
                     segment_row=segment_row,
                     reports_df=reports_df,
                     dt1=dt1,
@@ -5208,7 +5095,6 @@ def build_full_excel(
                 combined_segment_df = combine_report_tables_horizontally(
                     main_df=report_level_df,
                     sw_df=sw_vfd_df,
-                    fw_df=fw_vfd_df if include_fw_pumps_table else None,
                     fans_df=fan_vfd_df
                 )
                 combined_segment_df = combined_segment_df.drop(
