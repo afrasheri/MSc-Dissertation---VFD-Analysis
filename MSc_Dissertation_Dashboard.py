@@ -10,9 +10,10 @@ from plotly.offline import get_plotlyjs
 
 
 ROOT = Path(__file__).resolve().parent
-INPUT_DIR = ROOT / "output"
-OUTPUT_HTML = ROOT / "VFD_Dissertation_Dashboard.html"
-SIZE_MCR_FILE = ROOT / "Size_&_MCR.xlsx"
+PROJECT_ROOT = ROOT.parent
+INPUT_DIR = PROJECT_ROOT / "3.Processed Data"
+OUTPUT_HTML = PROJECT_ROOT / "4. Interactive Dashboard" / "VFD_Dissertation_Dashboard.html"
+SIZE_MCR_FILE = PROJECT_ROOT / "2.Input Data" / "02_Shared_Fleet_Data" / "Size_&_MCR.xlsx"
 SHEET = "Combined_Report"
 EQUIPMENT_CANDIDATES = ("SW1", "SW2", "SW3", "FAN1", "FAN2", "FAN3", "FAN4")
 
@@ -441,54 +442,612 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
 
 
 HTML = r'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VFD Dissertation Dashboard</title><script>__PLOTLY__</script>
-<style>
-:root{--blue:#17365d;--mid:#2f75b5;--cyan:#5bc0de;--green:#49a078;--orange:#f28e2b;--red:#d9534f;--grey:#eef1f5;--ink:#263238}
-*{box-sizing:border-box}body{margin:0;background:var(--grey);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
-header{background:linear-gradient(120deg,#102a43,#245b8f);color:#fff;padding:22px 4vw}h1{margin:0;font-size:clamp(22px,3vw,34px)}header p{margin:6px 0 0;opacity:.9}
-.filters{position:sticky;top:0;z-index:20;background:#fff;padding:10px 3vw;display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:9px;box-shadow:0 2px 10px #0002}
-label{font-size:11px;font-weight:700;color:var(--blue)}select,button{width:100%;padding:8px;border:1px solid #cbd5df;border-radius:6px;background:#fff;color:#17365d}.reset{align-self:end;background:var(--blue);color:#fff;cursor:pointer}
-.nav{display:flex;gap:8px;padding:14px 4vw 4px;flex-wrap:wrap}.nav button{width:auto;padding:9px 15px;cursor:pointer}.nav button.active{background:var(--blue);color:#fff}
-main{padding:10px 4vw 35px}.section{display:none}.section.active{display:block}.section h2{color:var(--blue);margin:8px 0}.note{color:#5c6773;margin:0 0 12px}
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:12px 0}.card,.chart-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px #17365d14}.kpi{padding:15px}.kpi b{display:block;color:#64748b;font-size:11px;text-transform:uppercase}.kpi span{display:block;color:var(--blue);font-size:clamp(18px,2vw,27px);font-weight:750;margin-top:5px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.chart-card{padding:12px;min-height:390px;min-width:0;overflow:hidden;position:relative}.chart-card.wide{grid-column:1/-1}.chart-title{font-weight:700;color:var(--blue);padding:2px 8px}.plot{height:335px;width:100%;min-width:0;max-width:100%;position:relative;overflow:hidden}.plot .js-plotly-plot,.plot .plot-container,.plot .svg-container{max-width:100%!important}.plot .modebar-container{left:0!important;right:0!important;width:100%!important;max-width:100%!important;padding:3px 5px 0!important;box-sizing:border-box!important;pointer-events:none}.plot .modebar{display:flex!important;flex-wrap:wrap!important;justify-content:flex-end!important;max-width:100%!important;margin-left:auto!important;pointer-events:auto}.plot .modebar-group{display:flex!important;flex:0 0 auto!important}.plot .modebar-btn{padding:2px 3px!important}.plot .modebar-btn svg{width:17px!important;height:17px!important}.table-wrap{height:330px;overflow:auto;margin-top:7px}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:var(--blue);color:#fff;text-align:left}th,td{padding:7px 9px;border-bottom:1px solid #e4e8ed;white-space:nowrap}tr:nth-child(even){background:#f7f9fb}.hidden{display:none!important}
-@media(max-width:1000px){.filters{grid-template-columns:repeat(3,1fr)}.kpis{grid-template-columns:repeat(3,1fr)}}@media(max-width:700px){.filters{position:static;grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.chart-card.wide{grid-column:auto}.kpis{grid-template-columns:1fr 1fr}.plot{height:310px}}
-</style></head><body>
-<header><h1>Monitored Equipment Energy &amp; Operational Performance</h1><p>Dissertation dashboard · 14-vessel consolidated analysis</p></header>
-<div class="filters">
- <label>Vessel Category / Size<select id="fCat"></select></label><label>Vessel<select id="fVessel"></select></label>
- <label>Equipment Category<select id="fEqCat"></select></label><label>Equipment<select id="fEquip"></select></label>
- <label>Segment Type<select id="fSegment"></select></label><label>Group Results By<select id="fGroup"><option>Vessel</option><option>Vessel Category</option><option>Equipment Category</option><option>Equipment</option></select></label>
- <button class="reset" id="reset">Reset Filters</button>
-</div>
-<nav class="nav"><button data-section="overview" class="active">1 · Overview</button><button data-section="utilisation">2 · VFD Utilisation</button><button data-section="energy">3 · Energy Performance</button><button data-section="drivers">4 · Operational Drivers</button></nav>
-<main>
-<section id="overview" class="section active"><h2>Overview</h2><p class="note">Estimated energy saving relative to an equivalent fixed-speed operating baseline.</p><div id="kpis" class="kpis"></div><div class="grid">
-<div class="chart-card"><div class="chart-title">Data coverage by vessel</div><div id="coverage" class="plot"></div></div><div class="chart-card"><div class="chart-title">Actual versus baseline energy by equipment category</div><div id="overviewEnergy" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Estimated saving percentage by vessel</div><div id="savingVessel" class="plot"></div></div><div class="chart-card"><div class="chart-title">Monthly actual, baseline and saving trend</div><div id="overviewMonthly" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Equipment availability</div><div id="availability" class="table-wrap"></div></div></div></section>
-<section id="utilisation" class="section"><h2>VFD Utilisation</h2><div class="grid">
-<div class="chart-card"><div class="chart-title">Auto / Manual / Bypass Operating Share</div><div id="modeShare" class="plot"></div></div><div class="chart-card"><div class="chart-title">Running-Hour-Weighted Average VFD Load</div><div id="weightedLoad" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Share of Equipment Running Hours in Intervals Above 80% and 90% Load</div><div id="highLoad" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Parallel-Unit Running-Hour Distribution by Vessel</div><div id="parallelHeatmap" class="plot"></div><p class="note">Running-hour shares are calculated separately within each vessel and equipment category. Unavailable units are excluded rather than treated as zero-hour equipment.</p></div>
-<div class="chart-card"><div class="chart-title">Distribution of Report-Interval Average Load</div><div id="loadBox" class="plot"></div><p class="note">Each observation represents the average VFD load recorded for one report interval.</p></div><div class="chart-card"><div class="chart-title">Daily Running-Hour-Weighted Average Load</div><div id="dailyLoad" class="plot"></div><p class="note">The number and composition of active vessels vary across the monitoring period. The rolling average is provided to clarify the underlying utilisation trend.</p></div>
-<div class="chart-card"><div class="chart-title">Port Stay versus Sea Passage Load</div><div id="segmentLoad" class="plot"></div></div><div class="chart-card"><div class="chart-title">Utilisation Summary</div><div id="utilTable" class="table-wrap"></div></div></div></section>
-<section id="energy" class="section"><h2>Energy Performance</h2><p class="note">Estimated energy saving relative to an equivalent fixed-speed operating baseline.</p><div class="grid">
-<div class="chart-card"><div class="chart-title">Actual energy versus fixed-speed baseline</div><div id="energyActualBase" class="plot"></div></div><div class="chart-card"><div class="chart-title">Estimated saving percentage</div><div id="energySavingPct" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Energy per VFD running hour</div><div id="energyPerHour" class="plot"></div></div><div class="chart-card"><div class="chart-title">Saving per VFD running hour</div><div id="savingPerHour" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Cumulative estimated savings</div><div id="cumulative" class="plot"></div></div><div class="chart-card"><div class="chart-title">Monthly energy trend</div><div id="energyMonthly" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">SW Pumps versus Engine-Room Fans</div><div id="categoryEnergy" class="plot"></div></div><div class="chart-card"><div class="chart-title">Port Stay versus Sea Passage saving percentage</div><div id="segmentSaving" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Port Stay versus Sea Passage saving per running hour</div><div id="segmentSavingHour" class="plot"></div></div><div class="chart-card"><div class="chart-title">Total Auxiliary Energy vs Energy of Monitored VFD-Controlled Equipment</div><div id="aeMonitored" class="plot"></div><p id="contributionNote" class="note"></p></div>
-<div class="chart-card"><div class="chart-title">Monitored VFD-Controlled Equipment Share of Total Auxiliary Energy</div><div id="contribution" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Energy summary</div><div id="energyTable" class="table-wrap"></div></div></div></section>
-<section id="drivers" class="section"><h2>Operational Drivers</h2><p class="note">The multivariable charts visualise the simultaneous variation of SW-pump load with sea-water temperature, PID temperature setting, main-engine load and operational segment. These visual relationships are exploratory and do not establish causal effects.<br>Cooling Temperature Margin is calculated as PID Temperature Setpoint minus Sea-Water Temperature. It represents a proxy for the available external cooling-temperature difference and not the actual PID control error, because the measured controlled-water temperature is not available in the present dataset.</p><div class="grid">
-<div class="chart-card"><div class="chart-title">SW-Pump Load by Sea-Water Temperature and Operational Segment</div><div id="seaTempLoad" class="plot"></div></div><div class="chart-card"><div class="chart-title">Main-Engine Load vs Daily SW-Pump Load</div><div id="meLoadSW" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Multivariable SW-Pump Operational Relationship</div><div id="multivariableScatter" class="plot"></div><p class="note">Marker colour represents PID Temperature Setpoint, marker size represents Main-Engine Load % MCR, and marker symbol represents operational segment.</p></div><div class="chart-card"><div class="chart-title">Sea-Water Temperature and PID Setpoint Interaction</div><div id="pidInteractionHeatmap" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Daily SW-Pump Load versus Cooling-Temperature Margin</div><div id="coolingMarginLoad" class="plot"></div></div>
-<div class="chart-card wide"><div class="chart-title">Spearman Correlation Matrix</div><div id="corrMatrix" class="plot"></div></div>
-<div class="chart-card"><div class="chart-title">Operational Driver Correlation Summary</div><div id="driverCorrTable" class="table-wrap"></div></div><div class="chart-card"><div class="chart-title">Correlation Summary Table</div><div id="corrTable" class="table-wrap"></div></div></div></section>
-</main><script>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>
+            VFD Dissertation Dashboard
+        </title>
+        <script>
+__PLOTLY__
+        </script>
+        <style>
+            :root {
+                --blue: #17365d;
+                --mid: #2f75b5;
+                --cyan: #5bc0de;
+                --green: #49a078;
+                --orange: #f28e2b;
+                --red: #d9534f;
+                --grey: #eef1f5;
+                --ink: #263238
+            }
+            * {
+                box-sizing: border-box
+            }
+            body {
+                margin: 0;
+                background: var(--grey);
+                color: var(--ink);
+                font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif
+            }
+            header {
+                background: linear-gradient(120deg, #102a43, #245b8f);
+                color: #fff;
+                padding: 22px 4vw
+            }
+            h1 {
+                margin: 0;
+                font-size: clamp(22px, 3vw, 34px)
+            }
+            header p {
+                margin: 6px 0 0;
+                opacity: .9
+            }
+            .filters {
+                position: sticky;
+                top: 0;
+                z-index: 20;
+                background: #fff;
+                padding: 10px 3vw;
+                display: grid;
+                grid-template-columns: repeat(7, minmax(130px, 1fr));
+                gap: 9px;
+                box-shadow: 0 2px 10px #0002
+            }
+            label {
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--blue)
+            }
+            select, button {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #cbd5df;
+                border-radius: 6px;
+                background: #fff;
+                color: #17365d
+            }
+            .reset {
+                align-self: end;
+                background: var(--blue);
+                color: #fff;
+                cursor: pointer
+            }
+            .nav {
+                display: flex;
+                gap: 8px;
+                padding: 14px 4vw 4px;
+                flex-wrap: wrap
+            }
+            .nav button {
+                width: auto;
+                padding: 9px 15px;
+                cursor: pointer
+            }
+            .nav button.active {
+                background: var(--blue);
+                color: #fff
+            }
+            main {
+                padding: 10px 4vw 35px
+            }
+            .section {
+                display: none
+            }
+            .section.active {
+                display: block
+            }
+            .section h2 {
+                color: var(--blue);
+                margin: 8px 0
+            }
+            .note {
+                color: #5c6773;
+                margin: 0 0 12px
+            }
+            .kpis {
+                display: grid;
+                grid-template-columns: repeat(6, 1fr);
+                gap: 12px;
+                margin: 12px 0
+            }
+            .card, .chart-card {
+                background: #fff;
+                border-radius: 10px;
+                box-shadow: 0 2px 8px #17365d14
+            }
+            .kpi {
+                padding: 15px
+            }
+            .kpi b {
+                display: block;
+                color: #64748b;
+                font-size: 11px;
+                text-transform: uppercase
+            }
+            .kpi span {
+                display: block;
+                color: var(--blue);
+                font-size: clamp(18px, 2vw, 27px);
+                font-weight: 750;
+                margin-top: 5px
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 14px
+            }
+            .chart-card {
+                padding: 12px;
+                min-height: 390px;
+                min-width: 0;
+                overflow: hidden;
+                position: relative
+            }
+            .chart-card.wide {
+                grid-column: 1/-1
+            }
+            .chart-title {
+                font-weight: 700;
+                color: var(--blue);
+                padding: 2px 8px
+            }
+            .plot {
+                height: 335px;
+                width: 100%;
+                min-width: 0;
+                max-width: 100%;
+                position: relative;
+                overflow: hidden
+            }
+            .plot .js-plotly-plot, .plot .plot-container, .plot .svg-container {
+                max-width: 100%!important
+            }
+            .plot .modebar-container {
+                left: 0!important;
+                right: 0!important;
+                width: 100%!important;
+                max-width: 100%!important;
+                padding: 3px 5px 0!important;
+                box-sizing: border-box!important;
+                pointer-events: none
+            }
+            .plot .modebar {
+                display: flex!important;
+                flex-wrap: wrap!important;
+                justify-content: flex-end!important;
+                max-width: 100%!important;
+                margin-left: auto!important;
+                pointer-events: auto
+            }
+            .plot .modebar-group {
+                display: flex!important;
+                flex: 0 0 auto!important
+            }
+            .plot .modebar-btn {
+                padding: 2px 3px!important
+            }
+            .plot .modebar-btn svg {
+                width: 17px!important;
+                height: 17px!important
+            }
+            .table-wrap {
+                height: 330px;
+                overflow: auto;
+                margin-top: 7px
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px
+            }
+            th {
+                position: sticky;
+                top: 0;
+                background: var(--blue);
+                color: #fff;
+                text-align: left
+            }
+            th, td {
+                padding: 7px 9px;
+                border-bottom: 1px solid #e4e8ed;
+                white-space: nowrap
+            }
+            tr:nth-child(even) {
+                background: #f7f9fb
+            }
+            .hidden {
+                display: none!important
+            }
+            @media(max-width:1000px) {
+                .filters {
+                    grid-template-columns: repeat(3, 1fr)
+                }
+                .kpis {
+                    grid-template-columns: repeat(3, 1fr)
+                }
+            }
+            @media(max-width:700px) {
+                .filters {
+                    position: static;
+                    grid-template-columns: 1fr 1fr
+                }
+                .grid {
+                    grid-template-columns: 1fr
+                }
+                .chart-card.wide {
+                    grid-column: auto
+                }
+                .kpis {
+                    grid-template-columns: 1fr 1fr
+                }
+                .plot {
+                    height: 310px
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>
+                Monitored Equipment Energy &amp; Operational Performance
+            </h1>
+            <p>
+                Dissertation dashboard · 14-vessel consolidated analysis
+            </p>
+        </header>
+        <div class="filters">
+            <label>
+                Vessel Category / Size
+                <select id="fCat">
+                </select>
+            </label>
+            <label>
+                Vessel
+                <select id="fVessel">
+                </select>
+            </label>
+            <label>
+                Equipment Category
+                <select id="fEqCat">
+                </select>
+            </label>
+            <label>
+                Equipment
+                <select id="fEquip">
+                </select>
+            </label>
+            <label>
+                Segment Type
+                <select id="fSegment">
+                </select>
+            </label>
+            <label>
+                Group Results By
+                <select id="fGroup">
+                    <option>
+                        Vessel
+                    </option>
+                    <option>
+                        Vessel Category
+                    </option>
+                    <option>
+                        Equipment Category
+                    </option>
+                    <option>
+                        Equipment
+                    </option>
+                </select>
+            </label>
+            <button class="reset" id="reset">
+                Reset Filters
+            </button>
+        </div>
+        <nav class="nav">
+            <button data-section="overview" class="active">
+                1 · Overview
+            </button>
+            <button data-section="utilisation">
+                2 · VFD Utilisation
+            </button>
+            <button data-section="energy">
+                3 · Energy Performance
+            </button>
+            <button data-section="drivers">
+                4 · Operational Drivers
+            </button>
+        </nav>
+        <main>
+            <section id="overview" class="section active">
+                <h2>
+                    Overview
+                </h2>
+                <p class="note">
+                    Estimated energy saving relative to an equivalent fixed-speed operating baseline.
+                </p>
+                <div id="kpis" class="kpis">
+                </div>
+                <div class="grid">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Data coverage by vessel
+                        </div>
+                        <div id="coverage" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Actual versus baseline energy by equipment category
+                        </div>
+                        <div id="overviewEnergy" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Estimated saving percentage by vessel
+                        </div>
+                        <div id="savingVessel" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Monthly actual, baseline and saving trend
+                        </div>
+                        <div id="overviewMonthly" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Equipment availability
+                        </div>
+                        <div id="availability" class="table-wrap">
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section id="utilisation" class="section">
+                <h2>
+                    VFD Utilisation
+                </h2>
+                <div class="grid">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Auto / Manual / Bypass Operating Share
+                        </div>
+                        <div id="modeShare" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Running-Hour-Weighted Average VFD Load
+                        </div>
+                        <div id="weightedLoad" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Share of Equipment Running Hours in Intervals Above 80% and 90% Load
+                        </div>
+                        <div id="highLoad" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Parallel-Unit Running-Hour Distribution by Vessel
+                        </div>
+                        <div id="parallelHeatmap" class="plot">
+                        </div>
+                        <p class="note">
+                            Running-hour shares are calculated separately within each vessel and equipment category. Unavailable units are excluded rather than treated as zero-hour equipment.
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Distribution of Report-Interval Average Load
+                        </div>
+                        <div id="loadBox" class="plot">
+                        </div>
+                        <p class="note">
+                            Each observation represents the average VFD load recorded for one report interval.
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Daily Running-Hour-Weighted Average Load
+                        </div>
+                        <div id="dailyLoad" class="plot">
+                        </div>
+                        <p class="note">
+                            The number and composition of active vessels vary across the monitoring period. The rolling average is provided to clarify the underlying utilisation trend.
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Port Stay versus Sea Passage Load
+                        </div>
+                        <div id="segmentLoad" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Utilisation Summary
+                        </div>
+                        <div id="utilTable" class="table-wrap">
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section id="energy" class="section">
+                <h2>
+                    Energy Performance
+                </h2>
+                <p class="note">
+                    Estimated energy saving relative to an equivalent fixed-speed operating baseline.
+                </p>
+                <div class="grid">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Actual energy versus fixed-speed baseline
+                        </div>
+                        <div id="energyActualBase" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Estimated saving percentage
+                        </div>
+                        <div id="energySavingPct" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Energy per VFD running hour
+                        </div>
+                        <div id="energyPerHour" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Saving per VFD running hour
+                        </div>
+                        <div id="savingPerHour" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Cumulative estimated savings
+                        </div>
+                        <div id="cumulative" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Monthly energy trend
+                        </div>
+                        <div id="energyMonthly" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            SW Pumps versus Engine-Room Fans
+                        </div>
+                        <div id="categoryEnergy" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Port Stay versus Sea Passage saving percentage
+                        </div>
+                        <div id="segmentSaving" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Port Stay versus Sea Passage saving per running hour
+                        </div>
+                        <div id="segmentSavingHour" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Total Auxiliary Energy vs Energy of Monitored VFD-Controlled Equipment
+                        </div>
+                        <div id="aeMonitored" class="plot">
+                        </div>
+                        <p id="contributionNote" class="note">
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Monitored VFD-Controlled Equipment Share of Total Auxiliary Energy
+                        </div>
+                        <div id="contribution" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Energy summary
+                        </div>
+                        <div id="energyTable" class="table-wrap">
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section id="drivers" class="section">
+                <h2>
+                    Operational Drivers
+                </h2>
+                <p class="note">
+                    The multivariable charts visualise the simultaneous variation of SW-pump load with sea-water temperature, PID temperature setting, main-engine load and operational segment. These visual relationships are exploratory and do not establish causal effects.
+                    <br>
+                    Cooling Temperature Margin is calculated as PID Temperature Setpoint minus Sea-Water Temperature. It represents a proxy for the available external cooling-temperature difference and not the actual PID control error, because the measured controlled-water temperature is not available in the present dataset.
+                </p>
+                <div class="grid">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            SW-Pump Load by Sea-Water Temperature and Operational Segment
+                        </div>
+                        <div id="seaTempLoad" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Main-Engine Load vs Daily SW-Pump Load
+                        </div>
+                        <div id="meLoadSW" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Multivariable SW-Pump Operational Relationship
+                        </div>
+                        <div id="multivariableScatter" class="plot">
+                        </div>
+                        <p class="note">
+                            Marker colour represents PID Temperature Setpoint, marker size represents Main-Engine Load % MCR, and marker symbol represents operational segment.
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Sea-Water Temperature and PID Setpoint Interaction
+                        </div>
+                        <div id="pidInteractionHeatmap" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Daily SW-Pump Load versus Cooling-Temperature Margin
+                        </div>
+                        <div id="coolingMarginLoad" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card wide">
+                        <div class="chart-title">
+                            Spearman Correlation Matrix
+                        </div>
+                        <div id="corrMatrix" class="plot">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Operational Driver Correlation Summary
+                        </div>
+                        <div id="driverCorrTable" class="table-wrap">
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Correlation Summary Table
+                        </div>
+                        <div id="corrTable" class="table-wrap">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        <script>
 const DATA=__DATA__; const C={actual:'#2f75b5',base:'#9aa6b2',save:'#49a078',orange:'#f28e2b',red:'#d9534f',cyan:'#5bc0de',blue:'#17365d'};
 function num(x){if(x===null||x===undefined||x===""){return null;}const value=Number(x);return Number.isFinite(value)?value:null;}
 function between(x,low,high){const value=num(x);return value!==null&&value>=low&&value<=high;}
@@ -567,7 +1126,9 @@ function renderDrivers(){const dc=driverDaily(),sw=dc.filter(x=>x.equipment_cate
 const renderers={overview:renderOverview,utilisation:renderUtilisation,energy:renderEnergy,drivers:renderDrivers};let active='overview',dirty=new Set(Object.keys(renderers));function render(){renderers[active]();dirty.delete(active);setTimeout(()=>window.dispatchEvent(new Event('resize')),0)}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.section').forEach(x=>x.classList.toggle('active',x.id===b.dataset.section));active=b.dataset.section;if(dirty.has(active))render()});
 filterIds.forEach(id=>document.getElementById(id).onchange=()=>{dirty=new Set(Object.keys(renderers));render()});fGroup.onchange=()=>{groupSelectionTouched=true;dirty=new Set(Object.keys(renderers));render()};reset.onclick=()=>{filterIds.forEach(id=>document.getElementById(id).value='All');fGroup.value='Vessel';groupSelectionTouched=false;dirty=new Set(Object.keys(renderers));render()};render();
-</script></body></html>'''
+        </script>
+    </body>
+</html>'''
 
 
 def build_dashboard() -> dict:
