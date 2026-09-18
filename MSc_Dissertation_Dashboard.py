@@ -10,10 +10,9 @@ from plotly.offline import get_plotlyjs
 
 
 ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = ROOT.parent
-INPUT_DIR = PROJECT_ROOT / "3.Processed Data"
-OUTPUT_HTML = PROJECT_ROOT / "4. Interactive Dashboard" / "VFD_Dissertation_Dashboard.html"
-SIZE_MCR_FILE = PROJECT_ROOT / "2.Input Data" / "02_Shared_Fleet_Data" / "Size_&_MCR.xlsx"
+INPUT_DIR = ROOT / "output"
+OUTPUT_HTML = ROOT / "VFD_Dissertation_Dashboard.html"
+SIZE_MCR_FILE = ROOT / "Size_&_MCR.xlsx"
 SHEET = "Combined_Report"
 EQUIPMENT_CANDIDATES = ("SW1", "SW2", "SW3", "FAN1", "FAN2", "FAN3", "FAN4")
 
